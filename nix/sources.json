@@ -1,0 +1,38 @@
+{
+    "gitignore": {
+        "branch": "master",
+        "description": "Nix function for filtering local git sources",
+        "homepage": "",
+        "owner": "hercules-ci",
+        "repo": "gitignore",
+        "rev": "7415c4feb127845553943a3856cbc5cb967ee5e0",
+        "sha256": "1zd1ylgkndbb5szji32ivfhwh04mr1sbgrnvbrqpmfb67g2g3r9i",
+        "type": "tarball",
+        "url": "https://github.com/hercules-ci/gitignore/archive/7415c4feb127845553943a3856cbc5cb967ee5e0.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "niv": {
+        "branch": "master",
+        "description": "Easy dependency management for Nix projects",
+        "homepage": "https://github.com/nmattia/niv",
+        "owner": "nmattia",
+        "repo": "niv",
+        "rev": "50600603b51432839c4b6267fd6a0d00ae6b0451",
+        "sha256": "1rrhlscbqdn9a77ws49acl536n3mz6bai68z08mpg8qqa4ahr2sn",
+        "type": "tarball",
+        "url": "https://github.com/nmattia/niv/archive/50600603b51432839c4b6267fd6a0d00ae6b0451.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "nixpkgs": {
+        "branch": "master",
+        "description": "A read-only mirror of NixOS/nixpkgs tracking the released channels. Send issues and PRs to",
+        "homepage": "https://github.com/NixOS/nixpkgs",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "92055b17c5a47f11b806cc615de0e0b43eb822ef",
+        "sha256": "1qkl7pifawh9sid34qd33dfbqk2r99df78dpdswlclq5j89lblmi",
+        "type": "tarball",
+        "url": "https://github.com/NixOS/nixpkgs/archive/92055b17c5a47f11b806cc615de0e0b43eb822ef.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    }
+}
