@@ -12,12 +12,14 @@ open Paket
 type CliArguments =
     | [<Unique>] Verbose
     | [<Unique>] Silent
+    | [<Unique>] Project of string
 with
     interface IArgParserTemplate with
         member s.Usage =
             match s with
             | Verbose -> "enables verbose logging"
             | Silent -> "disables logging"
+            | Project _ -> "Project or solution file to run dotnet commands against"
 
 type NuGetDependency =
     { name : string
@@ -170,9 +172,14 @@ let topLevelPackagesRe =
     System.Text.RegularExpressions.Regex("(?<name>Top-level Package) +(?<requested>Requested) +(?<resolved>Resolved)")
 let transitivePackagesRe =
     System.Text.RegularExpressions.Regex("(?<name>Transitive Package) +(?<resolved>Resolved)")
-let getNugetDependencies nugetSources =
+let getNugetDependencies nugetSources project =
     let dotnetOutput =
-        execSuccess "dotnet" ["list"; "package"; "--include-transitive"]
+        execSuccess "dotnet"
+            (["list"] @ 
+             (match project with
+              | None -> []
+              | Some project -> [project]) @
+             ["package"; "--include-transitive"])
         |> Async.RunSynchronously
     
     let lines =
@@ -384,10 +391,11 @@ let getNugetSources () =
 
 let run (parserResults : ParseResults<CliArguments>) =
     
+    let project = parserResults.TryGetResult <@ Project @>
     let paketDependencies = getPaketDependencies ()
     let nugetSources = getNugetSources ()
     let nugetDependencies =
-        getNugetDependencies nugetSources |> List.choose id
+        getNugetDependencies nugetSources project |> List.choose id
         
     let nugetDependencies =
         cleanNugetDependencies
