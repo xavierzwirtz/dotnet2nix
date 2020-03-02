@@ -1,10 +1,10 @@
 { pkgs ? import ../nix {}
 , src ? import ./source.nix {}
 , paket ? import ./bootstrap.nix {}
-, buildDotnetPackage ? pkgs.callPackage ../buildDotnetPackage.nix {}
+, buildDotnetCorePackage ? pkgs.callPackage ../buildDotnetCorePackage.nix {}
 }:
 
-buildDotnetPackage {
+buildDotnetCorePackage {
   name = "paket";
   inherit paket;
   dotnetPackage = pkgs.dotnetCombined;
