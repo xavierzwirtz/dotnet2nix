@@ -1,5 +1,5 @@
 { pkgs ? import ./nix {}
-, paket ? null
+, paket ? import ./paket-derivation {}
 , buildDotnetCorePackage ? pkgs.callPackage ./buildDotnetCorePackage.nix {}
 }:
 
