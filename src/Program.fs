@@ -111,8 +111,8 @@ let execSuccessRetry fileName arguments =
         (fun () -> execSuccess fileName arguments)
     
 let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Domain.PackageName) (version : SemVerInfo) sources transitive =
-    let packageName' = packageName.Name.ToString()
-    let version' = version.Normalize()
+    let packageName' = packageName.Name.ToString().ToLower()
+    let version' = version.Normalize().ToLower()
     
     async {
         match cachedNixLockFile.nugetDependencies |> Map.tryFind (packageName', version') with
@@ -589,7 +589,7 @@ let getCachedNixLockFile force lockFile : CachedNixLockFile =
                 j.Item("nuget") :?> JArray
                 |> Seq.choose(fun (x : JToken) ->
                     let s (n : string) = x.Item(n).ToObject<string>()
-                    let name = s "name"
+                    let name = (s "name").ToLower()
                     let url = s "url"
                     let version = s "version"
                     let hashType_hash = tryGetHashType x
