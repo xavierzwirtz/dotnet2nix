@@ -408,7 +408,7 @@ let printGitHubDependency
             
 let outputDependencies lockFile builtLockFile =
     traceVerbose (sprintf "built lock file: %A" builtLockFile)
-    use writer = IO.File.Open(lockFile, IO.FileMode.Truncate)
+    use writer = IO.File.Create(lockFile)
     use textWriter = new IO.StreamWriter(writer)
      
     textWriter.WriteLine """{ fetchurl
