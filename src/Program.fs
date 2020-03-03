@@ -492,8 +492,8 @@ let getCachedNixLockFile force lockFile : CachedNixLockFile =
           githubDependencies = Map.empty
         }
     else
-        let raw =
-            execSuccess "nix"
+        let result =
+            exec "nix"
                 ["eval"; "(import ./" + lockFile + " {
                     fetchurl = null;
                     fetchFromGitHub = null;
@@ -504,74 +504,76 @@ let getCachedNixLockFile force lockFile : CachedNixLockFile =
                     dotnet2nix-fetchFromGitHubForPaket = x : x;
                 })"; "--json"]
             |> Async.RunSynchronously
-        let j = JObject.Parse(raw.output)
-        
-        let tryGetHashType (x : JToken) =
-            hashTypes |> Seq.tryPick(fun hashType ->
-                let y = x.Item(hashType)
-                if y = null then None
-                else Some(hashType, y.ToObject<string>()))
+        if result.exitCode <> 0 then
+            fail (sprintf "error processing %s, rerun with --force to ignore" lockFile)
+        else
+            let j = JObject.Parse(result.output)
             
-        let github =
-            j.Item("github") :?> JArray
-            |> Seq.choose(fun (x : JToken) ->
-                let s (n : string) = x.Item(n).ToObject<string>()
-                let owner = s "owner"
-                let repo = s "repo"
-                let rev = s "rev"
-                let file = s "file"
-                let hashType_hash = tryGetHashType x
-                match hashType_hash with
-                | None ->
-                    tracef
-                        "could not parse hash on github dependency owner: '%s', repo '%s', rev: '%s', file: '%s'"
-                        owner
-                        repo
-                        rev
-                        file
-                    None
-                | Some (hashType, hash) ->
-                    let v = { owner = owner
-                              repo = repo
-                              commit = rev
-                              file = file
-                            }
-                    (v, { value = v
-                          hashType = hashType
-                          hash = hash })
-                    |> Some)
-            |> Map.ofSeq
-            
-        let nuget =
-            j.Item("nuget") :?> JArray
-            |> Seq.choose(fun (x : JToken) ->
-                let s (n : string) = x.Item(n).ToObject<string>()
-                let name = s "name"
-                let url = s "url"
-                let version = s "version"
-                let hashType_hash = tryGetHashType x
-                match hashType_hash with
-                | None ->
-                    tracef
-                        "could not parse hash on nuget dependency, name: '%s', version '%s'"
-                        name
-                        version
-                    None
-                | Some (hashType, hash) ->
-                    ((name, version),
-                     { value = { name = name
-                                 version = version
-                                 url = url
+            let tryGetHashType (x : JToken) =
+                hashTypes |> Seq.tryPick(fun hashType ->
+                    let y = x.Item(hashType)
+                    if y = null then None
+                    else Some(hashType, y.ToObject<string>()))
+                
+            let github =
+                j.Item("github") :?> JArray
+                |> Seq.choose(fun (x : JToken) ->
+                    let s (n : string) = x.Item(n).ToObject<string>()
+                    let owner = s "owner"
+                    let repo = s "repo"
+                    let rev = s "rev"
+                    let file = s "file"
+                    let hashType_hash = tryGetHashType x
+                    match hashType_hash with
+                    | None ->
+                        tracef
+                            "could not parse hash on github dependency owner: '%s', repo '%s', rev: '%s', file: '%s'"
+                            owner
+                            repo
+                            rev
+                            file
+                        None
+                    | Some (hashType, hash) ->
+                        let v = { owner = owner
+                                  repo = repo
+                                  commit = rev
+                                  file = file
                                 }
-                       hashType = hashType
-                       hash = hash
-                     }) |> Some)
-            |> Map.ofSeq
-            
-        { nugetDependencies = nuget
-          githubDependencies = github
-        }
-        
+                        (v, { value = v
+                              hashType = hashType
+                              hash = hash })
+                        |> Some)
+                |> Map.ofSeq
+                
+            let nuget =
+                j.Item("nuget") :?> JArray
+                |> Seq.choose(fun (x : JToken) ->
+                    let s (n : string) = x.Item(n).ToObject<string>()
+                    let name = s "name"
+                    let url = s "url"
+                    let version = s "version"
+                    let hashType_hash = tryGetHashType x
+                    match hashType_hash with
+                    | None ->
+                        tracef
+                            "could not parse hash on nuget dependency, name: '%s', version '%s'"
+                            name
+                            version
+                        None
+                    | Some (hashType, hash) ->
+                        ((name, version),
+                         { value = { name = name
+                                     version = version
+                                     url = url
+                                    }
+                           hashType = hashType
+                           hash = hash
+                         }) |> Some)
+                |> Map.ofSeq
+                
+            { nugetDependencies = nuget
+              githubDependencies = github
+            }
  
 let buildLockFile nugetDependencies (dependencies : PaketDependencies) =
     { nugetDependencies = nugetDependencies
