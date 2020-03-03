@@ -189,6 +189,7 @@ let parseRemoteFileDependencies (cachedNixLockFile : CachedNixLockFile) (remoteF
                     let! hashResp =
                         execSuccessRetry "nix-prefetch-github" [
                                 source.Owner; source.Project; "--rev"; source.Commit ]
+                    tracefn "finish prefetching github %s %s" source.Owner source.Project
                     let hashResp = hashResp.output |> JObject.Parse
                     let hashType = "sha256"
                     let hash = hashResp.Item(hashType).ToObject<string>()
@@ -348,10 +349,12 @@ let cleanAndHashNugetDependencies (dependencies : MaybeHashedNuGetDependency lis
                     let hd = grouped |> List.head
                     let hashType = "sha256"
 
+                    tracefn "pre-fetching %s" hd.url
                     let! hashRaw =
                         execSuccessRetry
                             "nix-prefetch-url" [
                                 hd.url; "--type"; hashType ]
+                    tracefn "finish pre-fetching %s" hd.url
                     let hash = hashRaw.output.Trim('\r', '\n')
 
                     return
