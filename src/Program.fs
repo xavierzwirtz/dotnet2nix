@@ -54,11 +54,15 @@ type GitHubDependency =
 type DependencyGroup =
     { group : Domain.GroupName option
       nugetDependencies : MaybeHashedNuGetDependency list
-      githubDependencies : Hashed<GitHubDependency> list
+      githubDependencies : GitHubDependency list
     }
     
 type PaketDependencies =
     { groups : DependencyGroup list
+    }
+    
+type HashedPaketDependencies =
+    { githubDependencies : list<string option * Hashed<GitHubDependency>>
     }
     
 type CachedNixLockFile =
@@ -122,7 +126,9 @@ let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Dom
             let getPackageDetails () =
                 retryAsync
                     (sprintf "resolving package %s %s details failed" packageName' version')
-                    (fun () -> NuGet.GetPackageDetails
+                    (fun () ->
+                        let x =
+                            NuGet.GetPackageDetails
                                 None
                                 (Directory.GetCurrentDirectory())
                                 force
@@ -130,7 +136,9 @@ let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Dom
                                     sources
                                     Constants.MainDependencyGroup
                                     packageName
-                                    version))
+                                    version)
+                        tracefn "finish resolving %s %s" (packageName') (version')
+                        x)
                     
             if not transitive then
                 let! nugetPackage = getPackageDetails()
@@ -169,40 +177,19 @@ let parseNugetDependencies (cachedNixLockFile : CachedNixLockFile) (sources : Pa
     |> Seq.concat
     |> Seq.toList
          
-let parseRemoteFileDependencies (cachedNixLockFile : CachedNixLockFile) (remoteFiles : ModuleResolver.ResolvedSourceFile list) =
+let parseRemoteFileDependencies (remoteFiles : ModuleResolver.ResolvedSourceFile list) =
     remoteFiles
     |> Seq.map(fun source ->
         match source.Origin with
         | ModuleResolver.GitHubLink ->
-            let v = { owner = source.Owner
-                      repo = source.Project
-                      commit = source.Commit
-                      file = source.Name }
-            
-            match cachedNixLockFile.githubDependencies |> Map.tryFind v with
-            | Some x ->
-                tracefn "using cached github %s %s" x.value.owner x.value.repo
-                async { return x }
-            | None ->
-                async {
-                    tracefn "prefetching github %s %s" source.Owner source.Project
-                    let! hashResp =
-                        execSuccessRetry "nix-prefetch-github" [
-                                source.Owner; source.Project; "--rev"; source.Commit ]
-                    tracefn "finish prefetching github %s %s" source.Owner source.Project
-                    let hashResp = hashResp.output |> JObject.Parse
-                    let hashType = "sha256"
-                    let hash = hashResp.Item(hashType).ToObject<string>()
-                    
-                    return
-                        { value = v
-                          hash = hash
-                          hashType = hashType
-                        }
-                }
+            { owner = source.Owner
+              repo = source.Project
+              commit = source.Commit
+              file = source.Name }
         | _  -> fail (sprintf "unsupported remote file origin %A" source.Origin)
     )
-    |> PSeq.toList
+    |> Seq.distinct
+    |> Seq.toList
     
 let getPaketDependencies cachedNixLockFile =
     tracefn "parsing paket.dependencies"
@@ -223,10 +210,12 @@ let getPaketDependencies cachedNixLockFile =
                     let! nugetDependencies =
                         parseNugetDependencies cachedNixLockFile group.Value.Resolution
                         |> Async.Parallel
+                        |> Async.StartChild
                         
-                    let! githubDependencies =
-                        parseRemoteFileDependencies cachedNixLockFile group.Value.RemoteFiles    
-                        |> Async.Parallel
+                    let githubDependencies =
+                        parseRemoteFileDependencies group.Value.RemoteFiles    
+                        
+                    let! nugetDependencies = nugetDependencies
                         
                     let groupName =
                         if group.Key = Paket.Constants.MainDependencyGroup then None
@@ -234,7 +223,7 @@ let getPaketDependencies cachedNixLockFile =
                     return
                         { group = groupName
                           nugetDependencies = nugetDependencies |> List.ofArray |> List.choose id
-                          githubDependencies = githubDependencies |> List.ofArray
+                          githubDependencies = githubDependencies
                         }
                 }
             )
@@ -243,6 +232,52 @@ let getPaketDependencies cachedNixLockFile =
             |> Seq.toList
         { groups = groups }
 
+let cleanAndHashPaketDependencies (cachedNixLockFile : CachedNixLockFile)  (paketDependencies : PaketDependencies) : HashedPaketDependencies =
+    let prefetchGithub github =
+        match cachedNixLockFile.githubDependencies |> Map.tryFind github with
+        | Some x ->
+            tracefn "using cached github %s %s" x.value.owner x.value.repo
+            async { return x }
+        | None ->
+            async {
+                tracefn "prefetching github %s %s" github.owner github.repo
+                let! hashResp =
+                    execSuccessRetry "nix-prefetch-github" [
+                        github.owner; github.repo; "--rev"; github.commit ]
+                tracefn "finish prefetching github %s %s" github.owner github.repo
+                let hashResp = hashResp.output |> JObject.Parse
+                let hashType = "sha256"
+                let hash = hashResp.Item(hashType).ToObject<string>()
+                                    
+                return
+                    { value = github
+                      hash = hash
+                      hashType = hashType
+                    }
+            }
+    let githubDependencies =
+        paketDependencies.groups
+        |> List.map(fun group ->
+            group.githubDependencies
+            |> List.map(fun github ->
+                let groupName =
+                    group.group
+                    |> Option.map(fun x -> x.ToString().ToLower())
+                (groupName, github)))
+        |> List.concat
+        |> List.groupBy(fun (_, github) -> github)
+        |> Seq.map(fun (github, groups) ->
+            async {
+                let! prefetched = prefetchGithub github
+                return groups |> List.map(fun (group, _) -> group, prefetched)
+            })
+        |> Async.Parallel
+        |> Async.RunSynchronously
+        |> List.ofArray
+        |> List.concat
+        |> List.sort
+    { githubDependencies = githubDependencies }
+        
 type DotNetParseState =
 | NotStarted
 | InProject
@@ -580,18 +615,9 @@ let getCachedNixLockFile force lockFile : CachedNixLockFile =
               githubDependencies = github
             }
  
-let buildLockFile nugetDependencies (dependencies : PaketDependencies) =
+let buildLockFile nugetDependencies (paketDependencies : HashedPaketDependencies) =
     { nugetDependencies = nugetDependencies
-      githubDependencies =
-          dependencies.groups
-          |> List.map(fun group ->
-              group.githubDependencies
-              |> List.map(fun github ->
-                  let groupName =
-                    group.group
-                    |> Option.map(fun x -> x.ToString().ToLower())
-                  (groupName, github)))
-          |> List.concat
+      githubDependencies = paketDependencies.githubDependencies
     }
     
 let run (parserResults : ParseResults<CliArguments>) =
@@ -608,14 +634,15 @@ let run (parserResults : ParseResults<CliArguments>) =
             let nugetSources = getNugetSources ()
             getNugetDependencies cachedNixLockFile nugetSources project |> List.choose id
     let paketDependencies = getPaketDependencies cachedNixLockFile
+    let hashedPaketDependencies = cleanAndHashPaketDependencies cachedNixLockFile paketDependencies
     
     let nugetDependencies =
         cleanAndHashNugetDependencies
             ([ paketDependencies.groups |> List.map(fun x -> x.nugetDependencies ) |> List.concat
                nugetDependencies ]
-             |> List.concat) 
+             |> List.concat)
         
-    let builtLockFile = buildLockFile nugetDependencies paketDependencies 
+    let builtLockFile = buildLockFile nugetDependencies hashedPaketDependencies 
     outputDependencies lockFile builtLockFile
     0
 
