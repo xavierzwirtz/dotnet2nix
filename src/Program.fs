@@ -596,11 +596,11 @@ let run (parserResults : ParseResults<CliArguments>) =
     let force = parserResults.Contains <@ Force @>
 
     let cachedNixLockFile = getCachedNixLockFile force lockFile
-    let paketDependencies = getPaketDependencies cachedNixLockFile
     let nugetSources = getNugetSources ()
     let nugetDependencies =
         getNugetDependencies cachedNixLockFile nugetSources project |> List.choose id
-        
+    let paketDependencies = getPaketDependencies cachedNixLockFile
+    
     let nugetDependencies =
         cleanAndHashNugetDependencies
             ([ paketDependencies.groups |> List.map(fun x -> x.nugetDependencies ) |> List.concat
