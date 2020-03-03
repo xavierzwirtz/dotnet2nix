@@ -15,6 +15,7 @@ type CliArguments =
     | [<Unique>] Verbose
     | [<Unique>] Silent
     | [<Unique>] Project of string
+    | [<Unique>] DisableDotnet
     | [<Unique>] Force
 with
     interface IArgParserTemplate with
@@ -24,6 +25,7 @@ with
             | Verbose -> "enables verbose logging"
             | Silent -> "disables logging"
             | Project _ -> "project or solution file to run dotnet commands against"
+            | DisableDotnet -> "disable getting required packages from dotnet cli"
             | Force -> "force pre-fetching of all resources, including resources already in lock file"
 
 type NuGetDependency =
@@ -593,12 +595,15 @@ let run (parserResults : ParseResults<CliArguments>) =
     
     let project = parserResults.TryGetResult <@ Project @>
     let lockFile = parserResults.TryGetResult <@ LockFile @> |> Option.defaultValue "dotnet.lock.nix"
+    let disableDotnet = parserResults.Contains <@ DisableDotnet @>
     let force = parserResults.Contains <@ Force @>
 
     let cachedNixLockFile = getCachedNixLockFile force lockFile
-    let nugetSources = getNugetSources ()
     let nugetDependencies =
-        getNugetDependencies cachedNixLockFile nugetSources project |> List.choose id
+        if disableDotnet then []
+        else 
+            let nugetSources = getNugetSources ()
+            getNugetDependencies cachedNixLockFile nugetSources project |> List.choose id
     let paketDependencies = getPaketDependencies cachedNixLockFile
     
     let nugetDependencies =
