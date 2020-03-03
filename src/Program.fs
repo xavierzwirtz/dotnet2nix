@@ -70,10 +70,45 @@ type NixLockFile =
 
 let hashTypes = ["sha256"; "sha512"]
 
+let retry message f =
+    let count = 3
+    let rec retry i = 
+        if i = count then f()
+        else
+            try
+                f()
+            with
+            | _ ->
+                tracefn "%s, retrying %i of 3" message i
+                retry (i + 1)
+    retry 0
+    
+let retryAsync message f =
+    let count = 3
+    let rec retry i =
+        async {
+            if i = count then
+                return! f()
+            else
+                try
+                    return! f()
+                with
+                | _ ->
+                    tracefn "%s, retrying %i of 3" message i
+                    return! retry (i + 1)
+        }
+    retry 0
+    
+let execSuccessRetry fileName arguments =
+    retryAsync
+        (sprintf "'%s %s' failed" fileName (printArguments arguments))
+        (fun () -> execSuccess fileName arguments)
+    
 let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Domain.PackageName) (version : SemVerInfo) sources transitive =
+    let packageName' = packageName.Name.ToString()
+    let version' = version.Normalize()
+    
     async {
-        let packageName' = packageName.Name.ToString()
-        let version' = version.Normalize()
         match cachedNixLockFile.nugetDependencies |> Map.tryFind (packageName', version') with
         | Some x ->
             tracefn "using cached nuget package %s %s" x.value.name x.value.version
@@ -83,15 +118,17 @@ let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Dom
             let force = true
                 
             let getPackageDetails () =
-                NuGet.GetPackageDetails
-                    None
-                    (Directory.GetCurrentDirectory())
-                    force
-                    (PackageResolver.GetPackageDetailsParameters.ofParams
-                        sources
-                        Constants.MainDependencyGroup
-                        packageName
-                        version)
+                retryAsync
+                    (sprintf "resolving package %s %s details failed" packageName' version')
+                    (fun () -> NuGet.GetPackageDetails
+                                None
+                                (Directory.GetCurrentDirectory())
+                                force
+                                (PackageResolver.GetPackageDetailsParameters.ofParams
+                                    sources
+                                    Constants.MainDependencyGroup
+                                    packageName
+                                    version))
                     
             if not transitive then
                 let! nugetPackage = getPackageDetails()
@@ -119,6 +156,7 @@ let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Dom
                     else
                         return raise ex
     }
+    
 let parseNugetDependencies (cachedNixLockFile : CachedNixLockFile) (sources : PackageResolver.PackageResolution) =
     groupBySources sources
     |> Seq.map(fun (source, packages) ->
@@ -147,8 +185,8 @@ let parseRemoteFileDependencies (cachedNixLockFile : CachedNixLockFile) (remoteF
                 async {
                     tracefn "prefetching github %s %s" source.Owner source.Project
                     let! hashResp =
-                        execSuccess "nix-prefetch-github" [
-                            source.Owner; source.Project; "--rev"; source.Commit ]
+                        execSuccessRetry "nix-prefetch-github" [
+                                source.Owner; source.Project; "--rev"; source.Commit ]
                     let hashResp = hashResp.output |> JObject.Parse
                     let hashType = "sha256"
                     let hash = hashResp.Item(hashType).ToObject<string>()
@@ -308,10 +346,10 @@ let cleanAndHashNugetDependencies (dependencies : MaybeHashedNuGetDependency lis
                     let hd = grouped |> List.head
                     let hashType = "sha256"
 
-                    let! hashRaw = execSuccess "nix-prefetch-url" [
-                        hd.url
-                        "--type"; hashType
-                    ]
+                    let! hashRaw =
+                        execSuccessRetry
+                            "nix-prefetch-url" [
+                                hd.url; "--type"; hashType ]
                     let hash = hashRaw.output.Trim('\r', '\n')
 
                     return
