@@ -1,8 +1,10 @@
 { pkgs ? import ./nix {}
+, paket ? null
 , buildDotnetCorePackage ? pkgs.callPackage ./buildDotnetCorePackage.nix {}
 }:
 
 buildDotnetCorePackage {
+  inherit paket;
   name = "dotnet2nix";
   dotnetPackage = pkgs.dotnetCombined;
   dotnetDependencies = pkgs.callPackage ./dotnet.lock.nix {};
