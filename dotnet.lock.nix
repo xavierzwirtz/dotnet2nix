@@ -3,52 +3,58 @@
 , stdenv
 , lib
 , unzip
-}:
-let
-  fetchNuGet = { url, name, version, ... } @ attrs:
-    stdenv.mkDerivation {
-      name = name;
-      pversion = version;
-      phases = [ "buildPhase" ];
-      src = fetchurl (
-        (
-          builtins.removeAttrs attrs [
-            "version"
-          ]
-        ) // {
-          inherit name url;
-        }
-      );
-      dontUnpack = true;
-      buildPhase = ''
-        mkdir -p "$out"
-        cp $src "$out/${lib.strings.toLower name}.${lib.strings.toLower version}.nupkg"
-      '';
-    };
-  fetchFromGitHubForPaket = { group, owner, repo, rev, file, ... } @ attrs:
-    let
-      group2 =
-        if group == null then "" else "${group}/";
-    in
+, dotnet2nix-fetchNuGet ? (
+    { url, name, version, ... } @ attrs:
       stdenv.mkDerivation {
-        name = "${if group == null then "" else "${group}_"}${owner}_${repo}_${builtins.replaceStrings [ "/" "_" ] [ "_" "__" ] file}";
-        pversion = rev;
+        name = name;
+        pversion = version;
         phases = [ "buildPhase" ];
-        src = fetchFromGitHub (
+        src = fetchurl (
           (
             builtins.removeAttrs attrs [
-              "file"
-              "group"
+              "version"
             ]
-          )
+          ) // {
+            inherit name url;
+          }
         );
+        dontUnpack = true;
         buildPhase = ''
-          fileDir=$(dirname "$out/${group2}${owner}/${repo}/${file}")
-          mkdir -p "$fileDir"
-          cp "$src/${file}" "$out/${group2}${owner}/${repo}/${file}"
-          echo "${rev}" > "$fileDir/paket.version"
+          mkdir -p "$out"
+          cp $src "$out/${lib.strings.toLower name}.${lib.strings.toLower version}.nupkg"
         '';
-      };
+      }
+  )
+, dotnet2nix-fetchFromGitHubForPaket ? (
+    { group, owner, repo, rev, file, ... } @ attrs:
+      let
+        group2 =
+          if group == null then "" else "${group}/";
+      in
+        stdenv.mkDerivation {
+          name = "${if group == null then "" else "${group}_"}${owner}_${repo}_${builtins.replaceStrings [ "/" "_" ] [ "_" "__" ] file}";
+          pversion = rev;
+          phases = [ "buildPhase" ];
+          src = fetchFromGitHub (
+            (
+              builtins.removeAttrs attrs [
+                "file"
+                "group"
+              ]
+            )
+          );
+          buildPhase = ''
+            fileDir=$(dirname "$out/${group2}${owner}/${repo}/${file}")
+            mkdir -p "$fileDir"
+            cp "$src/${file}" "$out/${group2}${owner}/${repo}/${file}"
+            echo "${rev}" > "$fileDir/paket.version"
+          '';
+        }
+  )
+}:
+let
+  fetchNuGet = dotnet2nix-fetchNuGet;
+  fetchFromGitHubForPaket = dotnet2nix-fetchFromGitHubForPaket;
 in
 {
   nuget = [
@@ -94,6 +100,22 @@ in
     )
     (
       fetchNuGet {
+        name = "Microsoft.NETCore.Targets";
+        version = "1.0.1";
+        url = "https://api.nuget.org/v3-flatcontainer/microsoft.netcore.targets/1.0.1/microsoft.netcore.targets.1.0.1.nupkg";
+        sha256 = "0ppdkwy6s9p7x9jix3v4402wb171cdiibq7js7i13nxpdky7074p";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "Microsoft.Win32.Primitives";
+        version = "4.0.1";
+        url = "https://api.nuget.org/v3-flatcontainer/microsoft.win32.primitives/4.0.1/microsoft.win32.primitives.4.0.1.nupkg";
+        sha256 = "1n8ap0cmljbqskxpf8fjzn7kh1vvlndsa75k01qig26mbw97k2q7";
+      }
+    )
+    (
+      fetchNuGet {
         name = "Microsoft.Win32.SystemEvents";
         version = "4.7.0";
         url = "https://api.nuget.org/v3-flatcontainer/microsoft.win32.systemevents/4.7.0/microsoft.win32.systemevents.4.7.0.nupkg";
@@ -106,6 +128,14 @@ in
         version = "0.11.2";
         url = "https://api.nuget.org/v3-flatcontainer/mono.cecil/0.11.2/mono.cecil.0.11.2.nupkg";
         sha256 = "114idyjaa6npi580d61gvr7i5xfcy5xi2yc1pfr9y82pj5kj7x5a";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "NETStandard.Library";
+        version = "1.6.0";
+        url = "https://api.nuget.org/v3-flatcontainer/netstandard.library/1.6.0/netstandard.library.1.6.0.nupkg";
+        sha256 = "0nmmv4yw7gw04ik8ialj3ak0j6pxa9spih67hnn1h2c38ba8h58k";
       }
     )
     (
@@ -134,158 +164,6 @@ in
     )
     (
       fetchNuGet {
-        name = "System.Buffers";
-        version = "4.5.0";
-        url = "https://api.nuget.org/v3-flatcontainer/system.buffers/4.5.0/system.buffers.4.5.0.nupkg";
-        sha256 = "1ywfqn4md6g3iilpxjn5dsr0f5lx6z0yvhqp4pgjcamygg73cz2c";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "System.Configuration.ConfigurationManager";
-        version = "4.7.0";
-        url = "https://api.nuget.org/v3-flatcontainer/system.configuration.configurationmanager/4.7.0/system.configuration.configurationmanager.4.7.0.nupkg";
-        sha256 = "0pav0n21ghf2ax6fiwjbng29f27wkb4a2ddma0cqx04s97yyk25d";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "System.Drawing.Common";
-        version = "4.7.0";
-        url = "https://api.nuget.org/v3-flatcontainer/system.drawing.common/4.7.0/system.drawing.common.4.7.0.nupkg";
-        sha256 = "0yfw7cpl54mgfcylvlpvrl0c8r1b0zca6p7r3rcwkvqy23xqcyhg";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "System.Memory";
-        version = "4.5.3";
-        url = "https://api.nuget.org/v3-flatcontainer/system.memory/4.5.3/system.memory.4.5.3.nupkg";
-        sha256 = "0naqahm3wljxb5a911d37mwjqjdxv9l0b49p5dmfyijvni2ppy8a";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "System.Net.Http.WinHttpHandler";
-        version = "4.7.0";
-        url = "https://api.nuget.org/v3-flatcontainer/system.net.http.winhttphandler/4.7.0/system.net.http.winhttphandler.4.7.0.nupkg";
-        sha256 = "0vhd62yqafxjcqibxwaql2r94s96y891b6sm61yj8zzvvym13zrc";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "System.Numerics.Vectors";
-        version = "4.5.0";
-        url = "https://api.nuget.org/v3-flatcontainer/system.numerics.vectors/4.5.0/system.numerics.vectors.4.5.0.nupkg";
-        sha256 = "1kzrj37yzawf1b19jq0253rcs8hsq1l2q8g69d7ipnhzb0h97m59";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "System.Runtime.CompilerServices.Unsafe";
-        version = "4.7.0";
-        url = "https://api.nuget.org/v3-flatcontainer/system.runtime.compilerservices.unsafe/4.7.0/system.runtime.compilerservices.unsafe.4.7.0.nupkg";
-        sha256 = "16r6sn4czfjk8qhnz7bnqlyiaaszr0ihinb7mq9zzr1wba257r54";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "System.Security.AccessControl";
-        version = "4.7.0";
-        url = "https://api.nuget.org/v3-flatcontainer/system.security.accesscontrol/4.7.0/system.security.accesscontrol.4.7.0.nupkg";
-        sha256 = "0n0k0w44flkd8j0xw7g3g3vhw7dijfm51f75xkm1qxnbh4y45mpz";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "System.Security.Cryptography.ProtectedData";
-        version = "4.7.0";
-        url = "https://api.nuget.org/v3-flatcontainer/system.security.cryptography.protecteddata/4.7.0/system.security.cryptography.protecteddata.4.7.0.nupkg";
-        sha256 = "1s1sh8k10s0apa09c5m2lkavi3ys90y657whg2smb3y8mpkfr5vm";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "System.Security.Permissions";
-        version = "4.7.0";
-        url = "https://api.nuget.org/v3-flatcontainer/system.security.permissions/4.7.0/system.security.permissions.4.7.0.nupkg";
-        sha256 = "13f366sj36jwbvld957gk2q64k2xbj48r8b0k9avrri2nlq1fs04";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "System.Security.Principal.Windows";
-        version = "4.7.0";
-        url = "https://api.nuget.org/v3-flatcontainer/system.security.principal.windows/4.7.0/system.security.principal.windows.4.7.0.nupkg";
-        sha256 = "1a56ls5a9sr3ya0nr086sdpa9qv0abv31dd6fp27maqa9zclqq5d";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "System.Windows.Extensions";
-        version = "4.7.0";
-        url = "https://api.nuget.org/v3-flatcontainer/system.windows.extensions/4.7.0/system.windows.extensions.4.7.0.nupkg";
-        sha256 = "11dmyx3j0jafjx5r9mkj1v4w2a4rzrdn8fgwm2d1g7fs1ayqcvy9";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "Microsoft.NETCore.Targets";
-        version = "1.0.1";
-        url = "https://api.nuget.org/v3-flatcontainer/microsoft.netcore.targets/1.0.1/microsoft.netcore.targets.1.0.1.nupkg";
-        sha256 = "0ppdkwy6s9p7x9jix3v4402wb171cdiibq7js7i13nxpdky7074p";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "Microsoft.Win32.Primitives";
-        version = "4.0.1";
-        url = "https://api.nuget.org/v3-flatcontainer/microsoft.win32.primitives/4.0.1/microsoft.win32.primitives.4.0.1.nupkg";
-        sha256 = "1n8ap0cmljbqskxpf8fjzn7kh1vvlndsa75k01qig26mbw97k2q7";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "NETStandard.Library";
-        version = "1.6.0";
-        url = "https://api.nuget.org/v3-flatcontainer/netstandard.library/1.6.0/netstandard.library.1.6.0.nupkg";
-        sha256 = "0nmmv4yw7gw04ik8ialj3ak0j6pxa9spih67hnn1h2c38ba8h58k";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "runtime.native.System";
-        version = "4.0.0";
-        url = "https://api.nuget.org/v3-flatcontainer/runtime.native.system/4.0.0/runtime.native.system.4.0.0.nupkg";
-        sha256 = "1ppk69xk59ggacj9n7g6fyxvzmk1g5p4fkijm0d7xqfkig98qrkf";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "runtime.native.System.IO.Compression";
-        version = "4.1.0";
-        url = "https://api.nuget.org/v3-flatcontainer/runtime.native.system.io.compression/4.1.0/runtime.native.system.io.compression.4.1.0.nupkg";
-        sha256 = "0d720z4lzyfcabmmnvh0bnj76ll7djhji2hmfh3h44sdkjnlkknk";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "runtime.native.System.Net.Http";
-        version = "4.0.1";
-        url = "https://api.nuget.org/v3-flatcontainer/runtime.native.system.net.http/4.0.1/runtime.native.system.net.http.4.0.1.nupkg";
-        sha256 = "1hgv2bmbaskx77v8glh7waxws973jn4ah35zysnkxmf0196sfxg6";
-      }
-    )
-    (
-      fetchNuGet {
-        name = "runtime.native.System.Security.Cryptography";
-        version = "4.0.0";
-        url = "https://api.nuget.org/v3-flatcontainer/runtime.native.system.security.cryptography/4.0.0/runtime.native.system.security.cryptography.4.0.0.nupkg";
-        sha256 = "0k57aa2c3b10wl3hfqbgrl7xq7g8hh3a3ir44b31dn5p61iiw3z9";
-      }
-    )
-    (
-      fetchNuGet {
         name = "System.AppContext";
         version = "4.1.0";
         url = "https://api.nuget.org/v3-flatcontainer/system.appcontext/4.1.0/system.appcontext.4.1.0.nupkg";
@@ -302,6 +180,14 @@ in
     )
     (
       fetchNuGet {
+        name = "System.Buffers";
+        version = "4.5.0";
+        url = "https://api.nuget.org/v3-flatcontainer/system.buffers/4.5.0/system.buffers.4.5.0.nupkg";
+        sha256 = "1ywfqn4md6g3iilpxjn5dsr0f5lx6z0yvhqp4pgjcamygg73cz2c";
+      }
+    )
+    (
+      fetchNuGet {
         name = "System.Collections";
         version = "4.0.11";
         url = "https://api.nuget.org/v3-flatcontainer/system.collections/4.0.11/system.collections.4.0.11.nupkg";
@@ -314,6 +200,14 @@ in
         version = "4.0.12";
         url = "https://api.nuget.org/v3-flatcontainer/system.collections.concurrent/4.0.12/system.collections.concurrent.4.0.12.nupkg";
         sha256 = "07y08kvrzpak873pmyxs129g1ch8l27zmg51pcyj2jvq03n0r0fc";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "System.Configuration.ConfigurationManager";
+        version = "4.7.0";
+        url = "https://api.nuget.org/v3-flatcontainer/system.configuration.configurationmanager/4.7.0/system.configuration.configurationmanager.4.7.0.nupkg";
+        sha256 = "0pav0n21ghf2ax6fiwjbng29f27wkb4a2ddma0cqx04s97yyk25d";
       }
     )
     (
@@ -354,6 +248,14 @@ in
         version = "4.1.0";
         url = "https://api.nuget.org/v3-flatcontainer/system.diagnostics.tracing/4.1.0/system.diagnostics.tracing.4.1.0.nupkg";
         sha256 = "1d2r76v1x610x61ahfpigda89gd13qydz6vbwzhpqlyvq8jj6394";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "System.Drawing.Common";
+        version = "4.7.0";
+        url = "https://api.nuget.org/v3-flatcontainer/system.drawing.common/4.7.0/system.drawing.common.4.7.0.nupkg";
+        sha256 = "0yfw7cpl54mgfcylvlpvrl0c8r1b0zca6p7r3rcwkvqy23xqcyhg";
       }
     )
     (
@@ -438,10 +340,26 @@ in
     )
     (
       fetchNuGet {
+        name = "System.Memory";
+        version = "4.5.3";
+        url = "https://api.nuget.org/v3-flatcontainer/system.memory/4.5.3/system.memory.4.5.3.nupkg";
+        sha256 = "0naqahm3wljxb5a911d37mwjqjdxv9l0b49p5dmfyijvni2ppy8a";
+      }
+    )
+    (
+      fetchNuGet {
         name = "System.Net.Http";
         version = "4.1.0";
         url = "https://api.nuget.org/v3-flatcontainer/system.net.http/4.1.0/system.net.http.4.1.0.nupkg";
         sha256 = "1i5rqij1icg05j8rrkw4gd4pgia1978mqhjzhsjg69lvwcdfg8yb";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "System.Net.Http.WinHttpHandler";
+        version = "4.7.0";
+        url = "https://api.nuget.org/v3-flatcontainer/system.net.http.winhttphandler/4.7.0/system.net.http.winhttphandler.4.7.0.nupkg";
+        sha256 = "0vhd62yqafxjcqibxwaql2r94s96y891b6sm61yj8zzvvym13zrc";
       }
     )
     (
@@ -458,6 +376,14 @@ in
         version = "4.1.0";
         url = "https://api.nuget.org/v3-flatcontainer/system.net.sockets/4.1.0/system.net.sockets.4.1.0.nupkg";
         sha256 = "1385fvh8h29da5hh58jm1v78fzi9fi5vj93vhlm2kvqpfahvpqls";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "System.Numerics.Vectors";
+        version = "4.5.0";
+        url = "https://api.nuget.org/v3-flatcontainer/system.numerics.vectors/4.5.0/system.numerics.vectors.4.5.0.nupkg";
+        sha256 = "1kzrj37yzawf1b19jq0253rcs8hsq1l2q8g69d7ipnhzb0h97m59";
       }
     )
     (
@@ -542,6 +468,14 @@ in
     )
     (
       fetchNuGet {
+        name = "System.Runtime.CompilerServices.Unsafe";
+        version = "4.7.0";
+        url = "https://api.nuget.org/v3-flatcontainer/system.runtime.compilerservices.unsafe/4.7.0/system.runtime.compilerservices.unsafe.4.7.0.nupkg";
+        sha256 = "16r6sn4czfjk8qhnz7bnqlyiaaszr0ihinb7mq9zzr1wba257r54";
+      }
+    )
+    (
+      fetchNuGet {
         name = "System.Runtime.Extensions";
         version = "4.1.0";
         url = "https://api.nuget.org/v3-flatcontainer/system.runtime.extensions/4.1.0/system.runtime.extensions.4.1.0.nupkg";
@@ -578,6 +512,14 @@ in
         version = "4.0.1";
         url = "https://api.nuget.org/v3-flatcontainer/system.runtime.numerics/4.0.1/system.runtime.numerics.4.0.1.nupkg";
         sha256 = "1y308zfvy0l5nrn46mqqr4wb4z1xk758pkk8svbz8b5ij7jnv4nn";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "System.Security.AccessControl";
+        version = "4.7.0";
+        url = "https://api.nuget.org/v3-flatcontainer/system.security.accesscontrol/4.7.0/system.security.accesscontrol.4.7.0.nupkg";
+        sha256 = "0n0k0w44flkd8j0xw7g3g3vhw7dijfm51f75xkm1qxnbh4y45mpz";
       }
     )
     (
@@ -630,10 +572,34 @@ in
     )
     (
       fetchNuGet {
+        name = "System.Security.Cryptography.ProtectedData";
+        version = "4.7.0";
+        url = "https://api.nuget.org/v3-flatcontainer/system.security.cryptography.protecteddata/4.7.0/system.security.cryptography.protecteddata.4.7.0.nupkg";
+        sha256 = "1s1sh8k10s0apa09c5m2lkavi3ys90y657whg2smb3y8mpkfr5vm";
+      }
+    )
+    (
+      fetchNuGet {
         name = "System.Security.Cryptography.X509Certificates";
         version = "4.1.0";
         url = "https://api.nuget.org/v3-flatcontainer/system.security.cryptography.x509certificates/4.1.0/system.security.cryptography.x509certificates.4.1.0.nupkg";
         sha256 = "0clg1bv55mfv5dq00m19cp634zx6inm31kf8ppbq1jgyjf2185dh";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "System.Security.Permissions";
+        version = "4.7.0";
+        url = "https://api.nuget.org/v3-flatcontainer/system.security.permissions/4.7.0/system.security.permissions.4.7.0.nupkg";
+        sha256 = "13f366sj36jwbvld957gk2q64k2xbj48r8b0k9avrri2nlq1fs04";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "System.Security.Principal.Windows";
+        version = "4.7.0";
+        url = "https://api.nuget.org/v3-flatcontainer/system.security.principal.windows/4.7.0/system.security.principal.windows.4.7.0.nupkg";
+        sha256 = "1a56ls5a9sr3ya0nr086sdpa9qv0abv31dd6fp27maqa9zclqq5d";
       }
     )
     (
@@ -694,6 +660,14 @@ in
     )
     (
       fetchNuGet {
+        name = "System.Windows.Extensions";
+        version = "4.7.0";
+        url = "https://api.nuget.org/v3-flatcontainer/system.windows.extensions/4.7.0/system.windows.extensions.4.7.0.nupkg";
+        sha256 = "11dmyx3j0jafjx5r9mkj1v4w2a4rzrdn8fgwm2d1g7fs1ayqcvy9";
+      }
+    )
+    (
+      fetchNuGet {
         name = "System.Xml.ReaderWriter";
         version = "4.0.11";
         url = "https://api.nuget.org/v3-flatcontainer/system.xml.readerwriter/4.0.11/system.xml.readerwriter.4.0.11.nupkg";
@@ -708,6 +682,39 @@ in
         sha256 = "0n4lvpqzy9kc7qy1a4acwwd7b7pnvygv895az5640idl2y9zbz18";
       }
     )
+    (
+      fetchNuGet {
+        name = "runtime.native.System";
+        version = "4.0.0";
+        url = "https://api.nuget.org/v3-flatcontainer/runtime.native.system/4.0.0/runtime.native.system.4.0.0.nupkg";
+        sha256 = "1ppk69xk59ggacj9n7g6fyxvzmk1g5p4fkijm0d7xqfkig98qrkf";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "runtime.native.System.IO.Compression";
+        version = "4.1.0";
+        url = "https://api.nuget.org/v3-flatcontainer/runtime.native.system.io.compression/4.1.0/runtime.native.system.io.compression.4.1.0.nupkg";
+        sha256 = "0d720z4lzyfcabmmnvh0bnj76ll7djhji2hmfh3h44sdkjnlkknk";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "runtime.native.System.Net.Http";
+        version = "4.0.1";
+        url = "https://api.nuget.org/v3-flatcontainer/runtime.native.system.net.http/4.0.1/runtime.native.system.net.http.4.0.1.nupkg";
+        sha256 = "1hgv2bmbaskx77v8glh7waxws973jn4ah35zysnkxmf0196sfxg6";
+      }
+    )
+    (
+      fetchNuGet {
+        name = "runtime.native.System.Security.Cryptography";
+        version = "4.0.0";
+        url = "https://api.nuget.org/v3-flatcontainer/runtime.native.system.security.cryptography/4.0.0/runtime.native.system.security.cryptography.4.0.0.nupkg";
+        sha256 = "0k57aa2c3b10wl3hfqbgrl7xq7g8hh3a3ir44b31dn5p61iiw3z9";
+      }
+    )
   ];
-  github = [];
+  github = [
+  ];
 }

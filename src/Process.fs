@@ -21,7 +21,7 @@ let printArguments (arguments : string seq) =
 let exec fileName arguments =
     let psi = new System.Diagnostics.ProcessStartInfo()
     let arguments = printArguments arguments
-    Logging.tracefn "%s %s" fileName arguments
+    Logging.traceVerbose (sprintf "%s %s" fileName arguments)
     psi.FileName <- fileName
     psi.Arguments <- arguments
     psi.UseShellExecute <- false
