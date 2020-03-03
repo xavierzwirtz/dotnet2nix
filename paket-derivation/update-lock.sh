@@ -17,7 +17,8 @@ derivation=$(nix eval -f "$DIR/lock.nix" --raw "")
     rm -rf ".paket/paket.bootstrapper.exe"
     dotnet restore
     #dotnet list package --include-transitive
-    dotnet2nix > "$DIR/dotnet.lock.nix"
+    dotnet2nix
+    mv dotnet.lock.nix "$DIR/dotnet.lock.nix"
 )
 
 echo "dotnet.lock.nix updated"
