@@ -35,7 +35,7 @@ pkgs.stdenv.mkDerivation (
       # prevent paket copy included in repo from being used
       rm -f .paket/paket.exe .paket/paket.bootstrapper.exe
       mkdir -p nuget_packages
-      export HOME=home
+      export HOME="$(pwd)/home"
       for package in ${toString dotnetDependencies.nuget}; do
         cp -r $package/. nuget_packages
       done
