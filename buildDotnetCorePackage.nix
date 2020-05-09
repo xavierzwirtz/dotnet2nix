@@ -3,8 +3,6 @@
 { dotnetPackage
 , dotnetDependencies ? {}
 , paket ? import ./paket-derivation {}
-, name
-, src
 , buildInputs ? []
 , propagatedBuildInputs ? []
 , buildPhase ? ''
@@ -22,7 +20,7 @@ pkgs.stdenv.mkDerivation (
     "dotnetPackage"
     "paket"
   ] // {
-    inherit name src buildPhase dotnetRestorePhase;
+    inherit buildPhase dotnetRestorePhase;
     buildInputs = [
       paket
     ] ++ buildInputs;
