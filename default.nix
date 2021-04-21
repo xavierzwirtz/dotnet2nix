@@ -26,7 +26,8 @@ buildDotnetCorePackage {
     makeWrapper \
       ${pkgs.dotnetCombined}/bin/dotnet \
       $out/bin/dotnet2nix \
-        --add-flags "$out/build/dotnet2nix.dll"
+        --add-flags "$out/build/dotnet2nix.dll" \
+        --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.nix ]}
   '';
   dontInstall = true;
 }
