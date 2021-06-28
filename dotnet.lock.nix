@@ -4,20 +4,27 @@
 , lib
 , unzip
 , dotnet2nix-fetchNuGet ? (
-    { url, name, version, ... } @ attrs:
+    { name, version, ... } @ attrs:
       stdenv.mkDerivation {
         name = name;
         pversion = version;
         phases = [ "buildPhase" ];
-        src = fetchurl (
-          (
-            builtins.removeAttrs attrs [
-              "version"
-            ]
-          ) // {
-            inherit name url;
-          }
-        );
+        src =
+          if attrs ? url then
+            fetchurl (
+              (
+                builtins.removeAttrs attrs [
+                  "version"
+                ]
+              ) // {
+                inherit name;
+              }
+            )
+          else
+            builtins.path {
+              path = attrs.file;
+              sha256 = attrs.sha256;
+            };
         dontUnpack = true;
         buildPhase = ''
           mkdir -p "$out"
@@ -158,7 +165,7 @@ in
       fetchNuGet {
         name = "paket.core";
         version = "5.242.2";
-        url = "https://www.nuget.org/api/v2/package/Paket.Core/5.242.2";
+        url = "https://api.nuget.org/v3-flatcontainer/paket.core/5.242.2/paket.core.5.242.2.nupkg";
         sha256 = "0q09m3is744isq2h1dwqkip606y2fzvr1mskf91qcwj3g5ik8ijk";
       }
     )
@@ -715,5 +722,6 @@ in
       }
     )
   ];
-  github = [];
+  github = [
+  ];
 }
