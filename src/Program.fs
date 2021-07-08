@@ -516,7 +516,7 @@ let printNuGetDependency lockFileDir (nuget : Hashed<NuGetDependency>) =
             (
                 match nuget.value.source with
                 | Url x -> sprintf "url = \"%s\"" x
-                | File x -> sprintf "file = %s" (Path.GetRelativePath(lockFileDir, x))
+                | File x -> sprintf "file = \"%s\"" (Path.GetRelativePath(lockFileDir, x))
             ) 
             nuget.hashType
             nuget.hash
@@ -574,7 +574,7 @@ let outputDependencies lockFile builtLockFile =
             )
           else
             builtins.path {
-              path = attrs.file;
+              path = ./. + attrs.file;
               sha256 = attrs.sha256;
             };
         dontUnpack = true;
@@ -646,11 +646,17 @@ let getCachedNixLockFile force lockFile : CachedNixLockFile =
                     stdenv = null;
                     lib = null;
                     unzip = null;
-                    dotnet2nix-fetchNuGet = x : x;
+                    dotnet2nix-fetchNuGet = x :
+                        if x ? url then x
+                        else
+                            if builtins.typeOf x.file == ''path'' then
+                                throw ''file attr with type path is unsupported''
+                            else x;
                     dotnet2nix-fetchFromGitHubForPaket = x : x;
                 })"; "--json"]
             |> Async.RunSynchronously
         if result.exitCode <> 0 then
+            printfn "%s" result.error
             fail (sprintf "error processing %s, rerun with --force to ignore" lockFile)
         else
             let j = JObject.Parse(result.output)
