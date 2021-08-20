@@ -574,7 +574,7 @@ let outputDependencies lockFile builtLockFile =
             )
           else
             builtins.path {
-              path = ./. + attrs.file;
+              path = ./. + ("/" + attrs.file);
               sha256 = attrs.sha256;
             };
         dontUnpack = true;
