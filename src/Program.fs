@@ -1,4 +1,5 @@
 ﻿module dotnet2nix.Program
+
 open Argu
 open Logging
 open Process
@@ -43,7 +44,7 @@ type Hashed<'t> =
       hashType : string
       hash : string
     }
-    
+
 type MaybeHashedNuGetDependency =
 | Hashed of Hashed<NuGetDependency>
 | NotHashed of NuGetDependency
@@ -54,21 +55,21 @@ type GitHubDependency =
       file : string
       commit : string
     }
-    
+
 type DependencyGroup =
     { group : Domain.GroupName option
       nugetDependencies : MaybeHashedNuGetDependency list
       githubDependencies : GitHubDependency list
     }
-    
+
 type PaketDependencies =
     { groups : DependencyGroup list
     }
-    
+
 type HashedPaketDependencies =
     { githubDependencies : list<string option * Hashed<GitHubDependency>>
     }
-    
+
 type CachedNixLockFile =
     { nugetDependencies : Map<(string * string), Hashed<NuGetDependency>>
       githubDependencies : Map<(GitHubDependency), Hashed<GitHubDependency>>
@@ -91,7 +92,7 @@ let hashTypes = ["sha256"; "sha512"]
 
 let retry message f =
     let count = 3
-    let rec retry i = 
+    let rec retry i =
         if i = count then f()
         else
             try
@@ -101,7 +102,7 @@ let retry message f =
                 tracefn "%s, retrying %i of 3" message i
                 retry (i + 1)
     retry 0
-    
+
 let retryAsync message f =
     let count = 3
     let rec retry i =
@@ -117,16 +118,16 @@ let retryAsync message f =
                     return! retry (i + 1)
         }
     retry 0
-    
+
 let execSuccessRetry fileName arguments =
     retryAsync
         (sprintf "'%s %s' failed" fileName (printArguments arguments))
         (fun () -> execSuccess fileName arguments)
-    
+
 let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Domain.PackageName) (version : SemVerInfo) (sources : Source list) transitive =
     let packageName' = packageName.Name.ToString().ToLower()
     let version' = version.Normalize().ToLower()
-    
+
     async {
         match cachedNixLockFile.nugetDependencies |> Map.tryFind (packageName', version') with
         | Some x ->
@@ -135,7 +136,7 @@ let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Dom
         | None ->
             tracefn "resolving %s %s" (packageName') (version')
             let force = true
-                
+
             let localPackageSources = sources |> List.choose(fun x ->
                 match x with
                 | LocalNuGet(x) -> Some (x)
@@ -144,7 +145,7 @@ let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Dom
                 match x with
                 | Other(x) -> Some(x)
                 | LocalNuGet _ -> None)
-            
+
             let getLocalPackageDetails () =
                 printfn "getting local package details for %s" packageName'
                 localPackageSources |> List.tryPick(fun source ->
@@ -155,7 +156,7 @@ let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Dom
                         let nupkg = NuGetLocal.findLocalPackage di.FullName packageName version
                         Some(nupkg)
                     with | ex -> None)
-                
+
             let getNugetPackageDetails () =
                 retryAsync
                     (sprintf "resolving package %s %s details failed" packageName' version')
@@ -172,7 +173,7 @@ let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Dom
                                     version)
                         tracefn "finish resolving %s %s" (packageName') (version')
                         x)
-                                
+
             let getPackageDetails() =
                 async {
                     let local = getLocalPackageDetails()
@@ -193,7 +194,7 @@ let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Dom
                               source = Url nugetPackage.DownloadLink
                             }
                             |> NotHashed
-                            |> Some   
+                            |> Some
                 }
             if not transitive then
                 return! getPackageDetails()
@@ -207,7 +208,7 @@ let resolvePackageUrl (cachedNixLockFile : CachedNixLockFile) (packageName : Dom
                     else
                         return raise ex
     }
-    
+
 let parseNugetDependencies root (cachedNixLockFile : CachedNixLockFile) (sources : PackageResolver.PackageResolution) =
     groupBySources sources
     |> Seq.map(fun (source, packages) ->
@@ -222,12 +223,12 @@ let parseNugetDependencies root (cachedNixLockFile : CachedNixLockFile) (sources
                         cache = cache
                     }
                 | _ -> Other package.Source
-                        
-            resolvePackageUrl cachedNixLockFile package.Name package.Version [source] false 
+
+            resolvePackageUrl cachedNixLockFile package.Name package.Version [source] false
         ))
     |> Seq.concat
     |> Seq.toList
-         
+
 let parseRemoteFileDependencies (remoteFiles : ModuleResolver.ResolvedSourceFile list) =
     remoteFiles
     |> Seq.map(fun source ->
@@ -241,18 +242,18 @@ let parseRemoteFileDependencies (remoteFiles : ModuleResolver.ResolvedSourceFile
     )
     |> Seq.distinct
     |> Seq.toList
-    
+
 let getPaketDependencies cachedNixLockFile =
     tracefn "parsing paket.dependencies"
     let dependencies = Paket.Dependencies.TryLocate()
     match dependencies with
-    | None -> 
+    | None ->
         tracefn "paket.dependencies not found"
         { groups = [] }
-    | Some dependencies -> 
+    | Some dependencies ->
         tracefn "parsing paket.lock"
         let lockFile = dependencies.GetLockFile()
-        
+
         tracefn "getting package urls and hashes"
         let groups =
             lockFile.Groups
@@ -262,12 +263,12 @@ let getPaketDependencies cachedNixLockFile =
                         parseNugetDependencies lockFile.RootPath cachedNixLockFile group.Value.Resolution
                         |> Async.Parallel
                         |> Async.StartChild
-                        
+
                     let githubDependencies =
-                        parseRemoteFileDependencies group.Value.RemoteFiles    
-                        
+                        parseRemoteFileDependencies group.Value.RemoteFiles
+
                     let! nugetDependencies = nugetDependencies
-                        
+
                     let groupName =
                         if group.Key = Paket.Constants.MainDependencyGroup then None
                         else Some group.Key
@@ -299,7 +300,7 @@ let cleanAndHashPaketDependencies (cachedNixLockFile : CachedNixLockFile)  (pake
                 let hashResp = hashResp.output |> JObject.Parse
                 let hashType = "sha256"
                 let hash = hashResp.Item(hashType).ToObject<string>()
-                                    
+
                 return
                     { value = github
                       hash = hash
@@ -328,7 +329,7 @@ let cleanAndHashPaketDependencies (cachedNixLockFile : CachedNixLockFile)  (pake
         |> List.concat
         |> List.sort
     { githubDependencies = githubDependencies }
-        
+
 type DotNetParseState =
 | NotStarted
 | InProject
@@ -343,13 +344,13 @@ let getNugetDependencies (paketDependencies : PaketDependencies) cachedNixLockFi
     tracefn "parsing 'dotnet list package'"
     let dotnetOutput =
         execSuccess "dotnet"
-            (["list"] @ 
+            (["list"] @
              (match project with
               | None -> []
               | Some project -> [project]) @
              ["package"; "--include-transitive"])
         |> Async.RunSynchronously
-    
+
     let lines =
         dotnetOutput.output.Split([|'\r'; '\n'|], System.StringSplitOptions.None)
 
@@ -370,7 +371,7 @@ let getNugetDependencies (paketDependencies : PaketDependencies) cachedNixLockFi
                     else if line.StartsWith("(A) : Auto-referenced package.") then cont
                     else if line.StartsWith("Project '") then
                         adv InProject
-                    else 
+                    else
                         match state with
                         | NotStarted -> bad()
                         | InProject ->
@@ -405,14 +406,14 @@ let getNugetDependencies (paketDependencies : PaketDependencies) cachedNixLockFi
                 let (result, state) = parse state
                 result, state
             )
-            ([], NotStarted)        
-    
+            ([], NotStarted)
+
     packages
     |> List.map(fun (name, version, transative) ->
         let name =
             if name.EndsWith "(A)" then name.Substring(0, name.Length - 3).Trim()
             else name
-        
+
         let paketDep =
             let name = name.ToLower()
             let version = version.ToLower()
@@ -420,7 +421,7 @@ let getNugetDependencies (paketDependencies : PaketDependencies) cachedNixLockFi
                 group.nugetDependencies
                 |> List.tryPick(fun nugetDependency ->
                     let check x =
-                        //tracefn "x.name(%s) = name(%s) && x.version(%s) = version(%s) " x.name name x.version version 
+                        //tracefn "x.name(%s) = name(%s) && x.version(%s) = version(%s) " x.name name x.version version
                         if x.name = name &&
                            x.version = version then
                            Some(nugetDependency)
@@ -431,7 +432,7 @@ let getNugetDependencies (paketDependencies : PaketDependencies) cachedNixLockFi
                     ) )
         match paketDep with
         | Some(x) -> async { return Some x }
-        | None -> 
+        | None ->
             resolvePackageUrl
                 cachedNixLockFile
                 (Domain.PackageName(name))
@@ -441,7 +442,7 @@ let getNugetDependencies (paketDependencies : PaketDependencies) cachedNixLockFi
     |> Async.Parallel
     |> Async.RunSynchronously
     |> List.ofArray
-    
+
 let cleanAndHashNugetDependencies (dependencies : MaybeHashedNuGetDependency list) =
     async {
         let (hashed, unhashed) =
@@ -451,7 +452,7 @@ let cleanAndHashNugetDependencies (dependencies : MaybeHashedNuGetDependency lis
                 | Hashed x -> Choice1Of2(x)
                 | NotHashed x -> Choice2Of2(x))
             |> List.partitionChoice
-        
+
         let! unhashedNowHashed =
             unhashed
             |> List.groupBy (fun x ->
@@ -461,7 +462,7 @@ let cleanAndHashNugetDependencies (dependencies : MaybeHashedNuGetDependency lis
                     let hd = grouped |> List.head
                     let hashType = "sha256"
 
-                    let! hashRaw = 
+                    let! hashRaw =
                         match hd.source with
                         | Url url ->
                             async {
@@ -471,7 +472,7 @@ let cleanAndHashNugetDependencies (dependencies : MaybeHashedNuGetDependency lis
                                         "nix-prefetch-url" [
                                             url; "--type"; hashType ]
                                 tracefn "finish pre-fetching %s" url
-                                return hashRaw   
+                                return hashRaw
                             }
                         | File file ->
                             async {
@@ -481,11 +482,11 @@ let cleanAndHashNugetDependencies (dependencies : MaybeHashedNuGetDependency lis
                                         "nix-hash" [
                                             "--base32"; "--type"; hashType; file ]
                                 tracefn "finish hashing %s" file
-                                return hashRaw   
+                                return hashRaw
                             }
-                    
+
                     let hash = hashRaw.output.Trim('\r', '\n')
-                    
+
                     return
                         { value = hd
                           hashType = hashType
@@ -511,16 +512,16 @@ let printNuGetDependency lockFileDir (nuget : Hashed<NuGetDependency>) =
         %s = "%s";
       }
     )"""
-            nuget.value.name 
-            nuget.value.version 
+            nuget.value.name
+            nuget.value.version
             (
                 match nuget.value.source with
                 | Url x -> sprintf "url = \"%s\"" x
                 | File x -> sprintf "file = \"%s\"" (Path.GetRelativePath(lockFileDir, x))
-            ) 
+            )
             nuget.hashType
             nuget.hash
-            
+
 let printGitHubDependency
     (group : string option)
     (github : Hashed<GitHubDependency>) =
@@ -538,18 +539,18 @@ let printGitHubDependency
              | None -> "null"
              | Some (x) -> "\"" + x + "\"")
             github.value.owner
-            github.value.repo 
+            github.value.repo
             github.value.commit
             github.value.file
-            github.hashType 
+            github.hashType
             github.hash
-            
+
 let outputDependencies lockFile builtLockFile =
     let lockFile = Path.GetFullPath(lockFile)
     traceVerbose (sprintf "built lock file: %A" builtLockFile)
     use writer = IO.File.Create(lockFile)
     use textWriter = new IO.StreamWriter(writer)
-     
+
     textWriter.WriteLine """{ fetchurl
 , fetchFromGitHub
 , stdenv
@@ -619,14 +620,14 @@ in
   nuget = ["""
     for nuget in builtLockFile.nugetDependencies do
         textWriter.WriteLine(printNuGetDependency (Path.GetDirectoryName(lockFile)) nuget)
-        
+
     textWriter.WriteLine """  ];
   github = ["""
     for (group, github) in builtLockFile.githubDependencies do
         textWriter.WriteLine(printGitHubDependency group github)
     textWriter.WriteLine """  ];
 }"""
-    
+
 let getNugetSources () =
     // TODO this should look for a NuGet.Config and parse the data from it
     // use list of sources from paket.dependencies if availible
@@ -660,13 +661,13 @@ let getCachedNixLockFile force lockFile : CachedNixLockFile =
             fail (sprintf "error processing %s, rerun with --force to ignore" lockFile)
         else
             let j = JObject.Parse(result.output)
-            
+
             let tryGetHashType (x : JToken) =
                 hashTypes |> Seq.tryPick(fun hashType ->
                     let y = x.Item(hashType)
                     if y = null then None
                     else Some(hashType, y.ToObject<string>()))
-                
+
             let github =
                 j.Item("github") :?> JArray
                 |> Seq.choose(fun (x : JToken) ->
@@ -696,7 +697,7 @@ let getCachedNixLockFile force lockFile : CachedNixLockFile =
                               hash = hash })
                         |> Some)
                 |> Map.ofSeq
-                
+
             let nuget =
                 j.Item("nuget") :?> JArray
                 |> Seq.choose(fun (x : JToken) ->
@@ -714,7 +715,7 @@ let getCachedNixLockFile force lockFile : CachedNixLockFile =
                             Some (File (file))
                         else
                             None
-                    
+
                     match hashType_hash with
                     | None ->
                         tracef
@@ -740,18 +741,18 @@ let getCachedNixLockFile force lockFile : CachedNixLockFile =
                                hash = hash
                              }) |> Some)
                 |> Map.ofSeq
-                
+
             { nugetDependencies = nuget
               githubDependencies = github
             }
- 
+
 let buildLockFile nugetDependencies (paketDependencies : HashedPaketDependencies) =
     { nugetDependencies = nugetDependencies
       githubDependencies = paketDependencies.githubDependencies
     }
-    
+
 let run (parserResults : ParseResults<CliArguments>) =
-    
+
     let project = parserResults.TryGetResult <@ Project @>
     let lockFile = parserResults.TryGetResult <@ LockFile @> |> Option.defaultValue "dotnet.lock.nix"
     let disableDotnet = parserResults.Contains <@ DisableDotnet @>
@@ -761,18 +762,18 @@ let run (parserResults : ParseResults<CliArguments>) =
     let paketDependencies = getPaketDependencies cachedNixLockFile
     let nugetDependencies =
         if disableDotnet then []
-        else 
+        else
             let nugetSources = getNugetSources () // TODO merge this with paket sources
             getNugetDependencies paketDependencies cachedNixLockFile nugetSources project |> List.choose id
     let hashedPaketDependencies = cleanAndHashPaketDependencies cachedNixLockFile paketDependencies
-    
+
     let nugetDependencies =
         cleanAndHashNugetDependencies
             ([ paketDependencies.groups |> List.map(fun x -> x.nugetDependencies ) |> List.concat
                nugetDependencies ]
              |> List.concat)
-        
-    let builtLockFile = buildLockFile nugetDependencies hashedPaketDependencies 
+
+    let builtLockFile = buildLockFile nugetDependencies hashedPaketDependencies
     outputDependencies lockFile builtLockFile
     0
 

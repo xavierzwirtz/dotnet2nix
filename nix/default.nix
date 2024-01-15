@@ -14,9 +14,7 @@ let
 in
 nixpkgs // {
   dotnetCombined = with nixpkgs.dotnetCorePackages; combinePackages [
-    sdk_3_1
-    netcore_3_1
-    sdk_2_1
-    netcore_2_1
+    sdk_8_0
+    runtime_8_0
   ];
 }

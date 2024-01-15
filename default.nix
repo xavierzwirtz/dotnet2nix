@@ -22,7 +22,7 @@ buildDotnetCorePackage {
     dotnet build --no-restore --configuration Release
     mkdir -p $out/build
     mkdir -p $out/bin
-    cp -r bin/Release/netcoreapp3.1/. $out/build
+    cp -r bin/Release/net8.0/. $out/build
     makeWrapper \
       ${pkgs.dotnetCombined}/bin/dotnet \
       $out/bin/dotnet2nix \
