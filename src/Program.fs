@@ -641,7 +641,7 @@ let getCachedNixLockFile force lockFile : CachedNixLockFile =
     else
         let result =
             exec "nix"
-                ["eval"; "(import ./" + lockFile + " {
+                ["eval"; "--impure"; "--expr"; "(import ./" + lockFile + " {
                     fetchurl = null;
                     fetchFromGitHub = null;
                     stdenv = null;
